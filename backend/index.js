@@ -6,7 +6,36 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+// --- START: NEW CORS & LOGGER CONFIGURATION ---
+
+// CRITICAL: REPLACE THIS WITH YOUR ACTUAL FRONTEND URL FROM RENDER
+const allowedOrigins = [
+  'https://rohit-negi-bot-f.onrender.com' // Example URL, use your real one!
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like Postman, curl, or server-to-server)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+};
+
+app.use(cors(corsOptions));
+
+// Simple logger middleware to see every incoming request in your Render logs
+app.use((req, res, next) => {
+    console.log(`Received: ${req.method} request for '${req.url}' from origin ${req.get('origin')}`);
+    next();
+});
+
+// --- END: NEW CORS & LOGGER CONFIGURATION ---
+
 app.use(express.json());
 
 // --- MODIFIED: Store multiple chat sessions in memory ---
@@ -20,7 +49,7 @@ const systemInstruction = {
      About you:
       1. Persona & Tone
         - You are Rohit Negi — a down‑to‑earth, super relatable Indian YouTuber who speaks in casual Hinglish.
-        - Maintain a motivational, encouraging vibe, with humor and street-smart swag (“bro”, “boss”, “chill mode”).
+        - Maintain a motivational, encouraging vibe, with humor and street-smart swag (“bro”, “boss”, “chill bhai”).
         - Use short, punchy sentences and confidently woven slang.
         - Example: “Boss, agar aaj main aapko ek dum straight bata deta hoon — ye step follow karo aur coding 
                     rocket jaisi speed pakdegi!”
@@ -63,24 +92,6 @@ const systemInstruction = {
         Don’t misrepresent his position or repeat debunked rumors (see Reddit backlash 
         If someone questions his credibility, respond story-wise: “Haan, market tough hai—but basics + consistency 
         always win.”
-
-      6. Few‑Shot Conversation Samples
-            Example 1 – DSA Advice
-            User: “Bhai array beginner hoon.”
-            You: “Bro, array basics toh rock-solid hone chahiye. Week 1 mein theory + 20 practice problems karo. 
-            Week 2 mein sliding window + two pointers. Main ne GFG pe 600+ questions kiye—arrays dominated my 
-            coding prep!”
-
-            Example 2 – System Design Course
-            User: “System design seekhna hai.”
-            You : “Perfect timing hai! Coder Army channel pe Roz naya System Design video aata hai (Mon–Fri). 
-            Intro se advance tak, abhi ek hackathon bhi aa rha hai.”
-
-            Example 3 – Motivation 
-            User: “Maine 600+ DSA problems kiye, par top job nahi mili.”
-            You : “Boss, yeh hota hai roller coaster. Mujhe bhi pehla test dump ho gaya tha. Bas consistency rakho,
-            project/story bhi polish karo, aur apply karte raho—success milni hi hai!”
-            
             
             Also you can provide links for channels :- 
             rohit negi youtube channel: https://www.youtube.com/@Rohit_Negi
@@ -97,19 +108,21 @@ app.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message and chatId are required' });
     }
 
-    // --- MODIFIED: Use the history for the specific chatId ---
     if (!chatSessions[chatId]) {
       chatSessions[chatId] = []; // Start a new history if it's a new chat
     }
     const currentHistory = chatSessions[chatId];
     currentHistory.push({ role: "user", parts: [{ text: message }] });
-    // --- End Modification ---
-
+    
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not set on the server.");
+    }
+
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     const payload = {
-      contents: currentHistory, // Send the correct history
+      contents: currentHistory,
       system_instruction: systemInstruction,
       generationConfig: {
         temperature: 0.7,
@@ -125,23 +138,23 @@ app.post('/chat', async (req, res) => {
 
     if (!apiResponse.ok) {
       const errorText = await apiResponse.text();
-      throw new Error(`API call failed with status ${apiResponse.status}: ${errorText}`);
+      console.error("Gemini API Error:", errorText);
+      throw new Error(`API call failed with status ${apiResponse.status}`);
     }
 
     const responseData = await apiResponse.json();
     const botReply = responseData.candidates[0].content.parts[0].text;
 
-    // --- MODIFIED: Add bot's reply to the correct history ---
     currentHistory.push({ role: "model", parts: [{ text: botReply }] });
 
     res.json({ reply: botReply });
 
   } catch (error) {
-    console.error('Error in /chat endpoint:', error);
+    console.error('Error in /chat endpoint:', error.message);
     res.status(500).json({ error: 'Failed to get a response from the chatbot.' });
   }
 });
 
 app.listen(port, () => {
-  console.log(`RohitNegiChatbot server listening at http://localhost:${port}`);
+  console.log(`RohitNegiChatbot server listening on port ${port}`);
 });
