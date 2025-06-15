@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentChatId = null;
     let chatHistories = {}; // { [chatId]: [{ role, content }] }
     
-    const API_URL = 'https://rohit-negi-bot-b.onrender.com';
+    const API_URL = 'https://rohit-negi-bot-b.onrender.com/chat';
     const BOT_AVATAR_URL = 'rohitnegi.png'; // A placeholder, replace if you have one
     const USER_AVATAR_URL = 'f1.png'; // A placeholder
 
