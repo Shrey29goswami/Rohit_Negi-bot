@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistories = {}; // { [chatId]: { title, messages: [{ role, content }] } }
     
     const API_URL = 'https://rohit-negi-bot-b.onrender.com/chat'; // Your production URL
-    const BOT_AVATAR_URL = 'https://i.ibb.co/L9yT3yT/rohit-negi-avatar.png';
-    const USER_AVATAR_URL = 'https://i.ibb.co/fDYrfrt/user-avatar.png';
+    const BOT_AVATAR_URL = 'rohitnegi.png';
+    const USER_AVATAR_URL = 'f1.png';
 
     // --- ADDED: Voice Recognition Setup ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title: 'New Chat',
             messages: [{
                 role: 'bot',
-                content: 'Boss, kis topic pe aaj help chahiye? DSA, system design ya motivation?'
+                content: 'Bta bhai...Kaise yaad kiya mujhe aaj!'
             }]
         };
         loadChat(currentChatId);
