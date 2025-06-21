@@ -10,14 +10,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsModal = document.getElementById('settings-modal');
     const closeModalBtn = document.getElementById('close-modal-btn');
     const themeToggle = document.getElementById('theme-toggle');
+    const micBtn = document.getElementById('mic-btn'); // ADDED: Mic button
 
     // --- State Management ---
     let currentChatId = null;
-    let chatHistories = {}; // { [chatId]: [{ role, content }] }
+    let chatHistories = {}; // { [chatId]: { title, messages: [{ role, content }] } }
     
-    const API_URL = 'https://rohit-negi-bot-b.onrender.com/chat';
-    const BOT_AVATAR_URL = 'rohitnegi.png'; // A placeholder, replace if you have one
-    const USER_AVATAR_URL = 'f1.png'; // A placeholder
+    const API_URL = 'https://rohit-negi-bot-b.onrender.com/chat'; // Your production URL
+    const BOT_AVATAR_URL = 'https://i.ibb.co/L9yT3yT/rohit-negi-avatar.png';
+    const USER_AVATAR_URL = 'https://i.ibb.co/fDYrfrt/user-avatar.png';
+
+    // --- ADDED: Voice Recognition Setup ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    let isListening = false;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-IN'; // Optimized for Indian English
+        recognition.interimResults = true;
+
+        recognition.onstart = () => {
+            isListening = true;
+            micBtn.classList.add('listening');
+        };
+
+        recognition.onend = () => {
+            isListening = false;
+            micBtn.classList.remove('listening');
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .map(result => result[0])
+                .map(result => result.transcript)
+                .join('');
+            messageInput.value = transcript;
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            isListening = false;
+            micBtn.classList.remove('listening');
+        };
+    } else {
+        micBtn.style.display = 'none'; // Hide mic button if not supported
+    }
 
     // --- Initialization ---
     function init() {
@@ -41,6 +80,19 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
         themeToggle.addEventListener('change', toggleTheme);
+        if (micBtn) { // ADDED: Mic button listener
+            micBtn.addEventListener('click', toggleVoiceRecognition);
+        }
+    }
+
+    // --- ADDED: Voice Recognition Toggle ---
+    function toggleVoiceRecognition() {
+        if (!recognition) return;
+        if (isListening) {
+            recognition.stop();
+        } else {
+            recognition.start();
+        }
     }
 
     // --- Core Chat Logic ---
@@ -50,7 +102,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!message) return;
 
         addMessageToScreen(message, 'user');
-        chatHistories[currentChatId].push({ role: 'user', content: message });
+        chatHistories[currentChatId].messages.push({ role: 'user', content: message });
+        
+        // Update history title if it's the first user message
+        if (chatHistories[currentChatId].messages.length <= 2) {
+             chatHistories[currentChatId].title = message;
+             renderChatHistory();
+        }
         saveStateToLocalStorage();
 
         messageInput.value = '';
@@ -67,12 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
             addMessageToScreen(data.reply, 'bot');
-            chatHistories[currentChatId].push({ role: 'bot', content: data.reply });
-            
-            // Update history title if it's the first message
-            if (chatHistories[currentChatId].length <= 2) {
-                updateChatHistoryTitle(currentChatId, message);
-            }
+            chatHistories[currentChatId].messages.push({ role: 'bot', content: data.reply });
             saveStateToLocalStorage();
 
         } catch (error) {
@@ -86,17 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessageToScreen(text, sender) {
         const messageWrapper = document.createElement('div');
         messageWrapper.classList.add('message', `${sender}-message`);
-
         const avatar = document.createElement('div');
         avatar.classList.add('avatar');
         const avatarImg = document.createElement('img');
         avatarImg.src = sender === 'user' ? USER_AVATAR_URL : BOT_AVATAR_URL;
         avatar.appendChild(avatarImg);
-
         const messageContent = document.createElement('div');
         messageContent.classList.add('message-content');
         messageContent.innerHTML = text.replace(/\n/g, '<br>');
-
         messageWrapper.appendChild(avatar);
         messageWrapper.appendChild(messageContent);
         chatWindow.appendChild(messageWrapper);
@@ -107,11 +157,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function startNewChat() {
         const newId = `chat_${Date.now()}`;
         currentChatId = newId;
-        chatHistories[currentChatId] = [{
-            role: 'bot',
-            content: 'Bta bhai...Kaise yaad kiya mujhe aaj!!'
-        }];
-        
+        chatHistories[currentChatId] = {
+            title: 'New Chat',
+            messages: [{
+                role: 'bot',
+                content: 'Boss, kis topic pe aaj help chahiye? DSA, system design ya motivation?'
+            }]
+        };
         loadChat(currentChatId);
         renderChatHistory();
         saveStateToLocalStorage();
@@ -120,29 +172,38 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadChat(chatId) {
         currentChatId = chatId;
         chatWindow.innerHTML = '';
-        const history = chatHistories[chatId] || [];
-        history.forEach(msg => addMessageToScreen(msg.content, msg.role));
-
-        // Highlight active chat in sidebar
+        const history = chatHistories[chatId];
+        if (history) {
+            history.messages.forEach(msg => addMessageToScreen(msg.content, msg.role));
+        }
         document.querySelectorAll('.chat-history-item').forEach(item => {
-            item.classList.remove('active');
-            if (item.dataset.chatId === chatId) {
-                item.classList.add('active');
-            }
+            item.classList.toggle('active', item.dataset.chatId === chatId);
         });
+        saveStateToLocalStorage(); // To save the current active chat
     }
     
+    // UPDATED: renderChatHistory to include delete button
     function renderChatHistory() {
         chatHistoryContainer.innerHTML = '';
         Object.keys(chatHistories).reverse().forEach(chatId => {
             const history = chatHistories[chatId];
-            const firstUserMessage = history.find(m => m.role === 'user');
-            const title = history.title || (firstUserMessage ? firstUserMessage.content : 'New Chat');
+            const title = history.title || 'Chat';
             
             const item = document.createElement('button');
             item.className = 'sidebar-button chat-history-item';
             item.dataset.chatId = chatId;
-            item.innerHTML = `<span>${title.substring(0, 25)}${title.length > 25 ? '...' : ''}</span>`;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = `${title.substring(0, 20)}${title.length > 20 ? '...' : ''}`;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-chat-btn';
+            deleteBtn.innerHTML = '✕'; // A simple 'x' character
+            deleteBtn.addEventListener('click', (e) => handleDeleteChat(e, chatId));
+
+            item.appendChild(titleSpan);
+            item.appendChild(deleteBtn);
+
             if (chatId === currentChatId) {
                 item.classList.add('active');
             }
@@ -151,14 +212,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updateChatHistoryTitle(chatId, title) {
-        if (chatHistories[chatId]) {
-            chatHistories[chatId].title = title;
-            renderChatHistory();
+    // ADDED: handleDeleteChat function
+    function handleDeleteChat(e, chatIdToDelete) {
+        e.stopPropagation(); // Prevent the click from loading the chat
+
+        if (confirm('Are you sure you want to delete this chat?')) {
+            delete chatHistories[chatIdToDelete];
+            
+            // If the active chat was deleted, start a new one
+            if (currentChatId === chatIdToDelete) {
+                startNewChat();
+            } else {
+                renderChatHistory(); // Just re-render if a non-active chat was deleted
+            }
+            saveStateToLocalStorage();
         }
     }
 
-    // --- Persistence (Local Storage) & Theming ---
+    // --- Persistence & Theming ---
     function saveStateToLocalStorage() {
         localStorage.setItem('rohit_chat_histories', JSON.stringify(chatHistories));
         localStorage.setItem('rohit_current_chat_id', currentChatId);
@@ -168,17 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
         chatHistories = JSON.parse(localStorage.getItem('rohit_chat_histories')) || {};
         currentChatId = localStorage.getItem('rohit_current_chat_id');
         const theme = localStorage.getItem('rohit_chat_theme');
-        if (theme === 'dark') {
-            themeToggle.checked = true;
-        }
+        themeToggle.checked = theme === 'dark';
     }
 
     function applyTheme() {
-        if (themeToggle.checked) {
-            document.body.classList.add('dark-mode');
-        } else {
-            document.body.classList.remove('dark-mode');
-        }
+        document.body.classList.toggle('dark-mode', themeToggle.checked);
     }
 
     function toggleTheme() {
