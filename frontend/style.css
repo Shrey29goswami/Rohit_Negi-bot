@@ -615,3 +615,35 @@ input:checked + .slider:before { transform: translateX(22px); }
         width: 100%;
     }
 }
+
+.chat-history-item {
+    position: relative; /* Needed for absolute positioning of the delete button */
+}
+
+.delete-chat-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: none; /* Hidden by default */
+}
+
+.chat-history-item:hover .delete-chat-btn {
+    display: block; /* Show on hover */
+}
+
+/* Don't show delete button on the active chat when hovering */
+.chat-history-item.active:hover .delete-chat-btn {
+    display: none;
+}
+
+.delete-chat-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: #f04747; /* Red color for delete action */
+}
